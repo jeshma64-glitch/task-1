@@ -447,15 +447,150 @@ class Stat extends StatelessWidget {
   }
 }
 
+// ================= REUSABLE EDIT HELPERS =================
+
+/// A single editable field's live state (icon + label stay fixed,
+/// the value can be changed by the user).
+class _EditableField {
+  final IconData icon;
+  final String label;
+  String value;
+  final TextInputType keyboardType;
+
+  _EditableField({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.keyboardType = TextInputType.text,
+  });
+}
+
+/// Shows a dialog with a text box pre-filled with [currentValue].
+/// Returns the new value if the user taps Save, or null if cancelled.
+Future<String?> _showEditDialog(
+    BuildContext context, {
+      required String label,
+      required String currentValue,
+      TextInputType keyboardType = TextInputType.text,
+    }) {
+  final controller = TextEditingController(text: currentValue);
+  const inkBlue = Color(0xFF003366);
+
+  return showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          "Edit $label",
+          style: const TextStyle(color: inkBlue, fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: label,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: inkBlue,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text("Save"),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 // ================= PAGES =================
 
 // ================= PERSONAL INFORMATION =================
 
-class PersonalInfoPage extends StatelessWidget {
+class PersonalInfoPage extends StatefulWidget {
   const PersonalInfoPage({super.key});
 
+  @override
+  State<PersonalInfoPage> createState() => _PersonalInfoPageState();
+}
+
+class _PersonalInfoPageState extends State<PersonalInfoPage> {
   static const Color inkBlue = Color(0xFF003366);
   static const Color lightBlue = Color(0xFFEAF2F8);
+
+  late final List<_EditableField> contactFields = [
+    _EditableField(icon: Icons.person, label: "Full Name", value: "Marcus Rossi"),
+    _EditableField(
+      icon: Icons.phone,
+      label: "Phone Number",
+      value: "+91 98765 43210",
+      keyboardType: TextInputType.phone,
+    ),
+    _EditableField(
+      icon: Icons.email,
+      label: "Email Address",
+      value: "marcus@gmail.com",
+      keyboardType: TextInputType.emailAddress,
+    ),
+    _EditableField(icon: Icons.cake_outlined, label: "Date of Birth", value: "14 Mar 1994"),
+    _EditableField(icon: Icons.wc, label: "Gender", value: "Male"),
+  ];
+
+  late final List<_EditableField> addressFields = [
+    _EditableField(icon: Icons.location_on, label: "City", value: "Bangalore, Karnataka"),
+    _EditableField(
+      icon: Icons.markunread_mailbox_outlined,
+      label: "Pin Code",
+      value: "560034",
+      keyboardType: TextInputType.number,
+    ),
+    _EditableField(
+      icon: Icons.home_outlined,
+      label: "Address Line",
+      value: "221B, Indiranagar 2nd Stage",
+    ),
+  ];
+
+  late final List<_EditableField> emergencyFields = [
+    _EditableField(
+      icon: Icons.contact_emergency_outlined,
+      label: "Contact Name",
+      value: "Elena Rossi (Spouse)",
+    ),
+    _EditableField(
+      icon: Icons.phone_in_talk_outlined,
+      label: "Contact Number",
+      value: "+91 91234 56789",
+      keyboardType: TextInputType.phone,
+    ),
+  ];
+
+  Future<void> _editField(_EditableField field) async {
+    final newValue = await _showEditDialog(
+      context,
+      label: field.label,
+      currentValue: field.value,
+      keyboardType: field.keyboardType,
+    );
+    if (newValue != null && newValue.isNotEmpty && newValue != field.value) {
+      setState(() => field.value = newValue);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${field.label} updated")),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -474,23 +609,13 @@ class PersonalInfoPage extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         children: [
           sectionLabel("CONTACT DETAILS"),
-          profileDetail(Icons.person, "Full Name", "Marcus Rossi"),
-          profileDetail(Icons.phone, "Phone Number", "+91 98765 43210"),
-          profileDetail(Icons.email, "Email Address", "marcus@gmail.com"),
-          profileDetail(Icons.cake_outlined, "Date of Birth", "14 Mar 1994"),
-          profileDetail(Icons.wc, "Gender", "Male"),
+          ...contactFields.map(profileDetail),
           const SizedBox(height: 10),
           sectionLabel("ADDRESS"),
-          profileDetail(Icons.location_on, "City", "Bangalore, Karnataka"),
-          profileDetail(Icons.markunread_mailbox_outlined, "Pin Code", "560034"),
-          profileDetail(Icons.home_outlined, "Address Line",
-              "221B, Indiranagar 2nd Stage"),
+          ...addressFields.map(profileDetail),
           const SizedBox(height: 10),
           sectionLabel("EMERGENCY CONTACT"),
-          profileDetail(Icons.contact_emergency_outlined, "Contact Name",
-              "Elena Rossi (Spouse)"),
-          profileDetail(Icons.phone_in_talk_outlined, "Contact Number",
-              "+91 91234 56789"),
+          ...emergencyFields.map(profileDetail),
         ],
       ),
     );
@@ -511,43 +636,46 @@ class PersonalInfoPage extends StatelessWidget {
     );
   }
 
-  Widget profileDetail(IconData icon, String title, String value) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(color: Colors.grey.shade200, blurRadius: 8),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: lightBlue,
-            child: Icon(icon, color: inkBlue),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: inkBlue,
-                  ),
-                ),
-              ],
+  Widget profileDetail(_EditableField field) {
+    return GestureDetector(
+      onTap: () => _editField(field),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(color: Colors.grey.shade200, blurRadius: 8),
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: lightBlue,
+              child: Icon(field.icon, color: inkBlue),
             ),
-          ),
-          const Icon(Icons.edit_outlined, color: Colors.grey, size: 18),
-        ],
+            const SizedBox(width: 15),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(field.label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                  const SizedBox(height: 2),
+                  Text(
+                    field.value,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: inkBlue,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.edit_outlined, color: Colors.grey, size: 18),
+          ],
+        ),
       ),
     );
   }
@@ -555,11 +683,57 @@ class PersonalInfoPage extends StatelessWidget {
 
 // ================= WORK INFORMATION =================
 
-class WorkInfoPage extends StatelessWidget {
+class WorkInfoPage extends StatefulWidget {
   const WorkInfoPage({super.key});
 
+  @override
+  State<WorkInfoPage> createState() => _WorkInfoPageState();
+}
+
+class _WorkInfoPageState extends State<WorkInfoPage> {
   static const Color inkBlue = Color(0xFF003366);
   static const Color lightBlue = Color(0xFFEAF2F8);
+
+  late final List<_EditableField> workFields = [
+    _EditableField(icon: Icons.badge, label: "Employee ID", value: "TECH11256"),
+    _EditableField(icon: Icons.work, label: "Designation", value: "Service Technician"),
+    _EditableField(icon: Icons.business, label: "Department", value: "Vehicle Service"),
+    _EditableField(icon: Icons.timer, label: "Experience", value: "3 Years"),
+    _EditableField(icon: Icons.schedule, label: "Shift Timing", value: "9:00 AM – 6:00 PM"),
+    _EditableField(
+      icon: Icons.store_mall_directory_outlined,
+      label: "Service Center",
+      value: "Indiranagar Branch",
+    ),
+    _EditableField(
+      icon: Icons.supervisor_account_outlined,
+      label: "Reporting Manager",
+      value: "Daniel Fernandes",
+    ),
+    _EditableField(icon: Icons.event_available_outlined, label: "Date Joined", value: "12 Jun 2023"),
+    _EditableField(
+      icon: Icons.verified_user_outlined,
+      label: "Employment Type",
+      value: "Full-Time, Permanent",
+    ),
+  ];
+
+  Future<void> _editField(_EditableField field) async {
+    final newValue = await _showEditDialog(
+      context,
+      label: field.label,
+      currentValue: field.value,
+      keyboardType: field.keyboardType,
+    );
+    if (newValue != null && newValue.isNotEmpty && newValue != field.value) {
+      setState(() => field.value = newValue);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${field.label} updated")),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -576,48 +750,39 @@ class WorkInfoPage extends StatelessWidget {
       ),
       body: ListView(
         padding: const EdgeInsets.all(18),
-        children: [
-          workCard(Icons.badge, "Employee ID", "TECH11256"),
-          workCard(Icons.work, "Designation", "Service Technician"),
-          workCard(Icons.business, "Department", "Vehicle Service"),
-          workCard(Icons.timer, "Experience", "3 Years"),
-          workCard(Icons.schedule, "Shift Timing", "9:00 AM – 6:00 PM"),
-          workCard(Icons.store_mall_directory_outlined, "Service Center",
-              "Indiranagar Branch"),
-          workCard(Icons.supervisor_account_outlined, "Reporting Manager",
-              "Daniel Fernandes"),
-          workCard(Icons.event_available_outlined, "Date Joined", "12 Jun 2023"),
-          workCard(Icons.verified_user_outlined, "Employment Type",
-              "Full-Time, Permanent"),
-        ],
+        children: workFields.map(workCard).toList(),
       ),
     );
   }
 
-  Widget workCard(IconData icon, String title, String value) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(color: Colors.grey.shade200, blurRadius: 8),
-        ],
-      ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: lightBlue,
-          child: Icon(icon, color: inkBlue),
+  Widget workCard(_EditableField field) {
+    return GestureDetector(
+      onTap: () => _editField(field),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(color: Colors.grey.shade200, blurRadius: 8),
+          ],
         ),
-        title: Text(title, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-        subtitle: Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: inkBlue,
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: lightBlue,
+            child: Icon(field.icon, color: inkBlue),
           ),
+          title: Text(field.label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          subtitle: Text(
+            field.value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: inkBlue,
+            ),
+          ),
+          trailing: const Icon(Icons.edit_outlined, color: Colors.grey, size: 18),
         ),
       ),
     );
